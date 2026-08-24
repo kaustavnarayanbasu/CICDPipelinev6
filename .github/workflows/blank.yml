@@ -1,0 +1,247 @@
+# This is a basic workflow to help you get started with Actions
+
+name: CI
+
+# Controls when the workflow will run
+on:
+  # Triggers the workflow on push or pull request events but only for the "master" branch
+  push:
+   branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
+
+# A workflow run is made up of one or more jobs that can run sequentially or in parallel
+jobs:
+  # This workflow contains a single job called "build"
+  build:
+    # The type of runner that the job will run on
+    runs-on: windows-latest
+
+    steps:
+
+      # ----------------------------------------------------------
+      # Checkout source code
+      # ----------------------------------------------------------
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+
+      # ----------------------------------------------------------
+      # Setup MSBuild
+      # ----------------------------------------------------------
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v2
+
+
+      # ----------------------------------------------------------
+      # Build SQL Project
+      # ----------------------------------------------------------
+      - name: Build SQL Project
+        run: |
+          msbuild CICdPipeline2/TestDbCICD/TestDbCICD.sqlproj `
+            /p:Configuration=Release `
+            /p:Platform="Any CPU"
+
+
+      # ----------------------------------------------------------
+      # Verify DACPAC
+      # ----------------------------------------------------------
+      - name: Verify DACPAC
+        shell: powershell
+        run: |
+          Write-Host "Searching for DACPAC..."
+
+          Get-ChildItem `
+            -Path CICdPipeline2/TestDbCICD/bin/Release `
+            -Filter "*.dacpac" `
+            -Recurse
+
+
+      # ----------------------------------------------------------
+      # Upload DACPAC
+      # ----------------------------------------------------------
+      - name: Upload DACPAC Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dacpac
+          path: CICdPipeline2/TestDbCICD/bin/Release/*.dacpac
+          if-no-files-found: error
+
+
+  # ============================================================
+  # DEPLOY DACPAC
+  # ============================================================
+  deploy:
+
+    name: Deploy DACPAC
+
+    runs-on: windows-latest
+
+    needs: build
+
+    strategy:
+
+      # If one database fails, continue deploying to
+      # the remaining databases.
+      fail-fast: false
+
+      matrix:
+
+        db:
+
+          # ------------------------------------------------------
+          # DEVELOPMENT
+          # ------------------------------------------------------
+          - name: HR_DB
+            server: Server1.database.windows.net
+            environment: DEV
+
+          # ------------------------------------------------------
+          # QA
+          # ------------------------------------------------------
+          - name: Finance_DB
+            server: Server2.database.windows.net
+            environment: QA
+
+          # ------------------------------------------------------
+          # PRODUCTION
+          # ------------------------------------------------------
+          - name: Sales_DB
+            server: Server3.database.windows.net
+            environment: PROD
+
+
+    steps:
+
+      # ----------------------------------------------------------
+      # Download DACPAC
+      # ----------------------------------------------------------
+      - name: Download DACPAC Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: dacpac
+          path: ./dacpac
+
+
+      # ----------------------------------------------------------
+      # Verify downloaded DACPAC
+      # ----------------------------------------------------------
+      - name: Verify DACPAC
+        shell: powershell
+        run: |
+          Write-Host "Downloaded DACPAC files:"
+
+          Get-ChildItem `
+            -Path ./dacpac `
+            -Filter "*.dacpac" `
+            -Recurse
+
+
+      # ----------------------------------------------------------
+      # Deploy HR_DB
+      # ----------------------------------------------------------
+      - name: Deploy ${{ matrix.db.name }}
+        shell: powershell
+        env:
+
+          # All secrets are passed through environment variables.
+          DEV_DB_CONNECTION: ${{ secrets.DEV_DB_CONNECTION }}
+          QA_DB_CONNECTION: ${{ secrets.QA_DB_CONNECTION }}
+          PROD_DB_CONNECTION: ${{ secrets.PROD_DB_CONNECTION }}
+
+        run: |
+
+          # Find DACPAC
+          $dacpac = Get-ChildItem `
+            -Path "./dacpac" `
+            -Filter "*.dacpac" `
+            -Recurse |
+            Select-Object -First 1
+
+          if ($null -eq $dacpac) {
+              Write-Error "DACPAC file was not found."
+              exit 1
+          }
+
+          Write-Host "========================================"
+          Write-Host "Database Deployment"
+          Write-Host "========================================"
+          Write-Host "Database : ${{ matrix.db.name }}"
+          Write-Host "Server   : ${{ matrix.db.server }}"
+          Write-Host "Environment : ${{ matrix.db.environment }}"
+          Write-Host "DACPAC   : $($dacpac.FullName)"
+          Write-Host "========================================"
+
+
+          # ------------------------------------------------------
+          # Select connection string based on environment
+          # ------------------------------------------------------
+
+          if ("${{ matrix.db.environment }}" -eq "DEV") {
+
+              $connectionString = $env:DEV_DB_CONNECTION
+
+          }
+          elseif ("${{ matrix.db.environment }}" -eq "QA") {
+
+              $connectionString = $env:QA_DB_CONNECTION
+
+          }
+          elseif ("${{ matrix.db.environment }}" -eq "PROD") {
+
+              $connectionString = $env:PROD_DB_CONNECTION
+
+          }
+          else {
+
+              Write-Error "Unknown environment."
+              exit 1
+
+          }
+
+
+          # ------------------------------------------------------
+          # Validate connection string
+          # ------------------------------------------------------
+
+          if ([string]::IsNullOrWhiteSpace($connectionString)) {
+
+              Write-Error "Connection string is empty for ${{ matrix.db.environment }}."
+              exit 1
+
+          }
+
+
+          # ------------------------------------------------------
+          # Deploy DACPAC
+          # ------------------------------------------------------
+
+          Write-Host "Starting DACPAC deployment..."
+
+          & SqlPackage.exe `
+            /Action:Publish `
+            /SourceFile:"$($dacpac.FullName)" `
+            /TargetConnectionString:"$connectionString" `
+            /p:BlockOnPossibleDataLoss=False `
+            /p:DropObjectsNotInSource=False `
+            /p:CreateNewDatabase=False `
+            /p:IncludeCompositeObjects=True
+
+          if ($LASTEXITCODE -ne 0) {
+
+              Write-Error "DACPAC deployment failed for ${{ matrix.db.name }}."
+              exit $LASTEXITCODE
+
+          }
+
+
+          Write-Host "========================================"
+          Write-Host "Deployment successful"
+          Write-Host "Database : ${{ matrix.db.name }}"
+          Write-Host "Server   : ${{ matrix.db.server }}"
+          Write-Host "========================================"
