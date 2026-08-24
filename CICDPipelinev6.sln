@@ -1,0 +1,27 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.14.36603.0 d17.14
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{00D1A9C2-B5F0-4AF3-8072-F6C62B433612}") = "CICDPipelinev6", "CICDPipelinev6.sqlproj", "{769A9F7A-4887-4C43-B6E0-ABEC33539746}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{769A9F7A-4887-4C43-B6E0-ABEC33539746}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{769A9F7A-4887-4C43-B6E0-ABEC33539746}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{769A9F7A-4887-4C43-B6E0-ABEC33539746}.Debug|Any CPU.Deploy.0 = Debug|Any CPU
+		{769A9F7A-4887-4C43-B6E0-ABEC33539746}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{769A9F7A-4887-4C43-B6E0-ABEC33539746}.Release|Any CPU.Build.0 = Release|Any CPU
+		{769A9F7A-4887-4C43-B6E0-ABEC33539746}.Release|Any CPU.Deploy.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {4644671A-9774-4E59-96AF-31366030C160}
+	EndGlobalSection
+EndGlobal
