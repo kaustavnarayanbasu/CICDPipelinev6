@@ -57,7 +57,7 @@ jobs:
           Write-Host "Searching for DACPAC..."
 
           Get-ChildItem `
-            -Path CICdPipeline2/TestDbCICD/bin/Release `
+            -Path CICDPipelinev6/bin/Debug `
             -Filter "*.dacpac" `
             -Recurse
 
